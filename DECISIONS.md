@@ -32,7 +32,7 @@ Status: **Accepted** unless noted.
 
 **Decision:** Hono on Vercel Functions.
 
-**Rationale:** Web-standards native and first-class on Vercel; built-in middleware we need (body limit, timeout, error handling); schema validation via `@hono/zod-validator`; small footprint.
+**Rationale:** Web-standards native and first-class on Vercel; built-in middleware we need (body limit, bearer auth, error handling); small footprint. Bodies are parsed and validated with zod by hand rather than `@hono/zod-validator`, so a missing `Content-Type` doesn't reject a valid payload (SPEC §6).
 
 **Note:** Raw framework performance is *not* the justification — LLM latency (~1–3 s) dwarfs framework overhead (sub-millisecond).
 
@@ -94,9 +94,11 @@ Client errors are unaffected: malformed JSON → 400, schema violation → 422, 
 
 **Decision:** Call Claude Haiku 5.5 through OpenRouter.
 
-**Rationale:** Fact extraction into a fixed schema is a narrow task: reliable structured output and low latency matter more than raw capability, which makes it a small, fast model's job. OpenRouter is used for practical reasons (existing credit balance). Per-key credit limits on OpenRouter act as the provider-side spend cap from D4 (to verify).
+**Rationale:** Fact extraction into a fixed schema is a narrow task: reliable structured output and low latency matter more than raw capability, which makes it a small, fast model's job. OpenRouter is used for practical reasons (existing credit balance). Per-key credit limits on OpenRouter act as the provider-side spend cap from D4 (verified, see `docs/VERIFIED-FACTS.md`).
 
-**Trade-off:** One extra network hop vs calling Anthropic directly. Structured-output support for this model via OpenRouter to be verified before implementation.
+**Trade-off:** One extra network hop vs calling Anthropic directly. Structured output (`response_format` json_schema) was verified for this model via OpenRouter, but strict enforcement isn't guaranteed, so the output is always re-validated with zod.
+
+**Measured in production:** ~2 s per call (1.5–4.2 s), ~2.5k input / ~400 output tokens, about $0.0005 per lead.
 
 ---
 
@@ -104,7 +106,9 @@ Client errors are unaffected: malformed JSON → 400, schema violation → 422, 
 
 **Decision:** Per-IP rate limiting configured as Vercel Firewall (WAF) rate-limit rules, not in application code.
 
-**Rationale:** Available on the free tier; blocks abusive traffic before it invokes the function (no compute, no LLM spend); no extra dependency (e.g. Upstash Redis). Vercel functions do not share memory, so a correct in-process limiter is not an option anyway.
+**Rationale:** Available on the free tier; blocks abusive traffic at the edge before it reaches our handler, so no LLM spend; no extra dependency (e.g. Upstash Redis). Vercel functions do not share memory, so a correct in-process limiter is not an option anyway.
+
+**Configured rule (Hobby allows one):** per IP, 100 requests / 60 s, action **403**, as chosen by the project owner. Vercel's default action is 429. With 403, well-behaved clients won't retry; with 429, they would retry after a pause. Not load-tested.
 
 **Trade-off:** The configuration lives in the Vercel dashboard, not the repo, so it is documented in DEPLOY.md.
 
@@ -191,6 +195,16 @@ Client errors are unaffected: malformed JSON → 400, schema violation → 422, 
 
 ---
 
+## D17. Integration-only testing (no unit tests)
+
+**Decision:** No unit-test framework. One smoke runner (`evals/run.ts`) sends real HTTP requests to a running server, local or production, in suites: behaviour, protocol, degraded, auth, misconfig. Failure paths are triggered through server config (invalid LLM key, `LLM_TIMEOUT_MS=1`, auth flags), not mocks. The orchestrator checks the rubric arithmetic manually once, during the scoring review.
+
+**Rationale:** Time-boxed take-home. Real-request smoke tests exercise the actual deployed behaviour the evaluators will hit, including every failure path in the brief's "Failure handling" criterion. Unit tests with mocked `fetch` would mostly re-test the mocks.
+
+**Accepted trade-off:** Automated checks assert tiers and decision boundaries, not exact scores (live LLM output varies). Exact rubric arithmetic is verified manually, not continuously.
+
+---
+
 ## D18. Single scoring endpoint: `POST /score`; `/` returns 204
 
 **Decision:** Scoring is served only at `POST /score`. Any request to `/` returns `204 No Content` with an empty body, by design. `GET /health` serves liveness.
@@ -200,16 +214,6 @@ Client errors are unaffected: malformed JSON → 400, schema violation → 422, 
 **Accepted risk:** A caller that POSTs to the bare domain gets a 204 (no body), not a score. Mitigated by submitting and documenting the full `/score` URL.
 
 **Rejected:** Accepting POST on both `/` and `/score`, which would have been more forgiving of a grader posting to the bare URL.
-
----
-
-## D17. Integration-only testing (no unit tests)
-
-**Decision:** No unit-test framework. One smoke runner (`evals/run.ts`) sends real HTTP requests to a running server, local or production, in suites: behaviour, protocol, degraded, auth, misconfig. Failure paths are triggered through server config (invalid LLM key, `LLM_TIMEOUT_MS=1`, auth flags), not mocks. The orchestrator checks the rubric arithmetic manually once, during the scoring review.
-
-**Rationale:** Time-boxed take-home. Real-request smoke tests exercise the actual deployed behaviour the evaluators will hit, including every failure path in the brief's "Failure handling" criterion. Unit tests with mocked `fetch` would mostly re-test the mocks.
-
-**Accepted trade-off:** Automated checks assert tiers and decision boundaries, not exact scores (live LLM output varies). Exact rubric arithmetic is verified manually, not continuously.
 
 ---
 
@@ -237,3 +241,17 @@ Client errors are unaffected: malformed JSON → 400, schema violation → 422, 
 **Rationale:** A malformed security setting is a deployment mistake that should surface immediately, not stay silent until someone flips `AUTH_ENABLED` on in production and enables a weak key. Empty values still count as unset (spec §4.6), so leaving `API_KEY` blank is fine.
 
 **Considered and rejected:** Enforcing the length only when `AUTH_ENABLED=true`, which would have been more forgiving of an unused variable.
+
+---
+
+## D22. Entry-file naming for Vercel's Hono preset
+
+**Decision:** The app factory lives in `src/create-app.ts` (not `src/app.ts`), and `src/index.ts`, the only entry, imports the `Hono` type from `"hono"`. `vercel.json` pins `"framework": "hono"`.
+
+**Rationale:** Found during deploy, not covered by Vercel's docs we checked in Phase 0:
+- Vercel's builder tries entry candidates named `app` before `index`, so it loaded `src/app.ts`, which has no default export. Every request then failed with `FUNCTION_INVOCATION_FAILED`.
+- It only accepts an entry whose source text matches an import from `"hono"`. Its check is a regex, which a type-only import satisfies.
+- A project created from the CLI defaults to the "Other" preset, which builds no function (404 everywhere).
+
+Local dev and the smoke suites never hit these because they import `src/index.ts` directly. Production verification after the fix: protocol 10/10, behaviour 13/13.
+
