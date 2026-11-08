@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../create-app.js";
 import type { Config } from "../schemas/index.js";
 
 /** Bearer-token auth (timing-safe, via Hono) when AUTH_ENABLED; a pass-through otherwise. */

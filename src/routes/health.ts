@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../create-app.js";
 
 export const healthRoutes = new Hono<AppEnv>();
 

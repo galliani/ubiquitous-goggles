@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import type { Config } from "../schemas/index.js";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../create-app.js";
 
 type Level = Config["LOG_LEVEL"];
 const LEVEL_RANK: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };

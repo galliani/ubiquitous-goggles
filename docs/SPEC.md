@@ -56,7 +56,7 @@ Scripts: `dev` (local server on :8787, reads `.env`), `typecheck` (`tsc --noEmit
 package.json  tsconfig.json  .env.example  .gitignore
 src/
   index.ts                 # Vercel entry: export default createApp(loadConfig(process.env))
-  app.ts                   # createApp(configResult): Hono
+  create-app.ts            # createApp(configResult): Hono (not app.ts: Vercel would pick it as entry)
   local.ts                 # @hono/node-server dev entry (not deployed logic)
   config.ts                # loadConfig(env) → ConfigResult
   schemas/
@@ -295,7 +295,7 @@ export type ConfigResult = { ok: true; config: Config } | { ok: false; issues: s
 ### 4.7 Module contracts
 
 ```ts
-// app.ts
+// create-app.ts
 export function createApp(configResult: ConfigResult): Hono;
 
 // llm/extract.ts — NEVER throws; every failure becomes {ok:false}

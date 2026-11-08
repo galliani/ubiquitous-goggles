@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../create-app.js";
 import { deadlineFrom } from "../lib/budget.js";
 import type { Logger } from "../lib/logger.js";
 import { extractFacts } from "../llm/extract.js";

@@ -1,4 +1,4 @@
-import { createApp } from "./app.js";
+import { createApp } from "./create-app.js";
 import { loadConfig } from "./config.js";
 
 // Vercel zero-config Hono entry.

@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../create-app.js";
 
 /** Assigns a UUID to every request and echoes it as X-Request-Id (errors and 204 included). */
 export const requestId: MiddlewareHandler<AppEnv> = async (c, next) => {

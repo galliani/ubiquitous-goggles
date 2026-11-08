@@ -1,6 +1,6 @@
 import type { Context, ErrorHandler, NotFoundHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../create-app.js";
 import type { ErrorBody, ErrorCode } from "../schemas/index.js";
 import type { Logger } from "../lib/logger.js";
 
