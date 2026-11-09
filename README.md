@@ -1,12 +1,5 @@
 # Northern Coast lead scorer
 
-**Endpoint:** `POST https://northern-coast-lead-scorer-ecru.vercel.app/score` (no auth)
-
-```sh
-curl -s -X POST https://northern-coast-lead-scorer-ecru.vercel.app/score \
-  -H 'Content-Type: application/json' \
-  -d '{"lead_id":"S002","channel":"email","conversation":[{"role":"lead","text":"hey can I get a few cans of red bull for my office party"}]}'
-```
 
 ## How it works
 
